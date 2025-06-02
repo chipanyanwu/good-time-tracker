@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { useRouter } from "next/navigation"
 
 interface ReflectionCardProps {
-  id: number
+  id: string
   title: string
   startDate: string
   endDate: string

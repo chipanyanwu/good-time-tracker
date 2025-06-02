@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils"
 import { useRouter } from "next/navigation"
 
 interface ActivityCardProps {
-  id: number
+  id: string
   title: string
   date: string
   content: string
@@ -31,7 +31,7 @@ export function ActivityCard({
   const energyFormatted = `${energyLevel > 0 ? "+" : ""}${energyLevel}%`
 
   // Determine energy level color based on value
-  const energyColor = energyLevel >= 0 ? "text-green-500" : "text-red-500"
+  const energyColor = energyLevel > 0 ? "text-green-500" : "text-red-500"
 
   const handleClick = () => {
     router.push(`/entries/${id}`)

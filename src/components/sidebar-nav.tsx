@@ -1,8 +1,8 @@
 "use client"
 
-import type React from "react"
-
 import Link from "next/link"
+import { useAuthState, useSignOut } from "react-firebase-hooks/auth"
+import { auth } from "@/lib/firebase/firebaseConfig"
 import { usePathname } from "next/navigation"
 import {
   ClipboardList,
@@ -60,11 +60,12 @@ interface SidebarNavProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 export function SidebarNav({ className, ...props }: SidebarNavProps) {
+  const [user] = useAuthState(auth)
+  const [signOut] = useSignOut(auth)
   const pathname = usePathname()
 
-  const handleLogout = () => {
-    // TODO: Implement logout functionality
-    console.log("Logging out...")
+  const handleLogout = async () => {
+    const success = await signOut()
   }
 
   return (
@@ -100,59 +101,64 @@ export function SidebarNav({ className, ...props }: SidebarNavProps) {
           </div>
         </ScrollArea>
 
-        <div className="border-t px-3 pt-4 flex flex-col gap-1">
-          {/* New Entry Button */}
-          <Link href="/tracker">
-            <Button className="w-full flex items-center gap-2">
-              <PlusCircle className="h-4 w-4" />
-              New Entry
-            </Button>
-          </Link>
-
-          {/* Profile Tile */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                className="w-full flex items-center gap-3 p-3 h-auto justify-start hover:bg-muted"
-              >
-                <Avatar className="h-8 w-8">
-                  <AvatarImage
-                    src="/placeholder.svg?height=32&width=32"
-                    alt="User"
-                  />
-                  <AvatarFallback>JD</AvatarFallback>
-                </Avatar>
-                <div className="flex flex-col items-start text-sm">
-                  <span className="font-medium">John Doe</span>
-                  <span className="text-muted-foreground text-xs">
-                    john@example.com
-                  </span>
-                </div>
+        {user && (
+          <div className="border-t px-3 pt-4 flex flex-col gap-1">
+            {/* New Entry Button */}
+            <Link href="/tracker">
+              <Button className="w-full flex items-center gap-2">
+                <PlusCircle className="h-4 w-4" />
+                New Entry
               </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuItem
-                onClick={handleLogout}
-                className="text-red-600 focus:text-red-600"
-              >
-                <LogOut className="mr-2 h-4 w-4" />
-                Log Out
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+            </Link>
+
+            {/* Profile Tile */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  className="w-full flex items-center gap-3 p-3 h-auto justify-start hover:bg-muted"
+                >
+                  <Avatar className="h-8 w-8">
+                    <AvatarImage src={user.photoURL ?? ""} alt="User" />
+                    <AvatarFallback>
+                      {(user.displayName ?? "Unknown")
+                        .split(" ")
+                        .map((word) => word.charAt(0))
+                        .join("")}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex flex-col items-start text-sm">
+                    <span className="font-medium">{user.displayName}</span>
+                    <span className="text-muted-foreground text-xs">
+                      {user.email}
+                    </span>
+                  </div>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuItem
+                  onClick={handleLogout}
+                  className="text-red-600 focus:text-red-600"
+                >
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Log Out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        )}
       </div>
     </div>
   )
 }
 
 export function MobileSidebar() {
+  const [user] = useAuthState(auth)
+  const [signOut] = useSignOut(auth)
   const pathname = usePathname()
 
-  const handleLogout = () => {
-    // TODO: Implement logout functionality
-    console.log("Logging out...")
+  const handleLogout = async () => {
+    const success = await signOut()
   }
 
   return (
@@ -196,48 +202,52 @@ export function MobileSidebar() {
             </div>
           </ScrollArea>
 
-          <div className="border-t p-3 space-y-3">
-            {/* New Entry Button */}
-            <Link href="/tracker">
-              <Button className="w-full flex items-center gap-2">
-                <PlusCircle className="h-4 w-4" />
-                New Entry
-              </Button>
-            </Link>
-
-            {/* Profile Tile */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  className="w-full flex items-center gap-3 p-3 h-auto justify-start hover:bg-muted"
-                >
-                  <Avatar className="h-8 w-8">
-                    <AvatarImage
-                      src="/placeholder.svg?height=32&width=32"
-                      alt="User"
-                    />
-                    <AvatarFallback>JD</AvatarFallback>
-                  </Avatar>
-                  <div className="flex flex-col items-start text-sm">
-                    <span className="font-medium">John Doe</span>
-                    <span className="text-muted-foreground text-xs">
-                      john@example.com
-                    </span>
-                  </div>
+          {user && (
+            <div className="border-t p-3 space-y-3">
+              {/* New Entry Button */}
+              <Link href="/tracker">
+                <Button className="w-full flex items-center gap-2">
+                  <PlusCircle className="h-4 w-4" />
+                  New Entry
                 </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuItem
-                  onClick={handleLogout}
-                  className="text-red-600 focus:text-red-600"
-                >
-                  <LogOut className="mr-2 h-4 w-4" />
-                  Log Out
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+              </Link>
+
+              {/* Profile Tile */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    className="w-full flex items-center gap-3 p-3 h-auto justify-start hover:bg-muted"
+                  >
+                    <Avatar className="h-8 w-8">
+                      <AvatarImage src={user.photoURL ?? ""} alt="User" />
+                      <AvatarFallback>
+                        {(user.displayName ?? "Unknown")
+                          .split(" ")
+                          .map((word) => word.charAt(0))
+                          .join("")}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex flex-col items-start text-sm">
+                      <span className="font-medium">{user.displayName}</span>
+                      <span className="text-muted-foreground text-xs">
+                        {user.email}
+                      </span>
+                    </div>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuItem
+                    onClick={handleLogout}
+                    className="text-red-600 focus:text-red-600"
+                  >
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Log Out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          )}
         </div>
       </SheetContent>
     </Sheet>

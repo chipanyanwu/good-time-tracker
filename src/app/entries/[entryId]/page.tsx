@@ -9,129 +9,208 @@ import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent } from "@/components/ui/card"
 import { Slider } from "@/components/ui/slider"
 import { ArrowLeft, Save, Trash } from "lucide-react"
+import { useAuthState } from "react-firebase-hooks/auth"
+import { Spinner } from "@/components/ui/spinner"
+import { auth } from "@/lib/firebase/firebaseConfig"
 
-// Sample combined data for activities and reflections
-const entriesData = [
-  // Activities
-  {
-    id: 1,
-    type: "activity",
-    title: "Morning Meditation",
-    date: "2025-06-01",
-    content:
-      "Started the day with a 20-minute meditation session. Focused on breathing techniques and mindfulness. Felt very centered and ready to tackle the day ahead.",
-    engagementLevel: 100,
-    energyLevel: 75,
-  },
-  {
-    id: 2,
-    type: "activity",
-    title: "Project Planning",
-    date: "2025-06-01",
-    content:
-      "Spent 2 hours planning the new marketing campaign. Outlined key objectives, target audience, and content strategy. Team seemed engaged but we hit some roadblocks with budget constraints.",
-    engagementLevel: 85,
-    energyLevel: -20,
-  },
-  // Reflections
-  {
-    id: 101,
-    type: "reflection",
-    title: "Weekly Review",
-    startDate: "2025-05-26",
-    endDate: "2025-06-01",
-    content:
-      "This week was particularly productive. I managed to complete three major projects and felt a strong sense of accomplishment. The team collaboration was excellent, and we overcame several technical challenges together. Looking forward, I want to focus more on work-life balance.",
-  },
-  {
-    id: 102,
-    type: "reflection",
-    title: "Monthly Goals Assessment",
-    startDate: "2025-05-01",
-    endDate: "2025-05-31",
-    content:
-      "Reflecting on May's goals, I achieved about 80% of what I set out to do. The marketing campaign launch was successful, but I fell short on the personal development goals I had set. Need to be more realistic about time allocation and prioritize better.",
-  },
-]
+import {
+  getAllActivities,
+  getAllReflections,
+  updateActivity,
+  updateReflection,
+  deleteActivity,
+  deleteReflection,
+} from "@/lib/firebase/db"
+import type { Activity, Reflection } from "@/types/entry"
+
+type UnifiedEntry =
+  | {
+      id: string
+      type: "activity"
+      title: string
+      content: string
+      date: string // stored as "YYYY-MM-DD"
+      engagement: number
+      energy: number
+    }
+  | {
+      id: string
+      type: "reflection"
+      title: string
+      content: string
+      startDate: string // stored as "YYYY-MM-DD"
+      endDate: string // stored as "YYYY-MM-DD"
+    }
 
 export default function EntryDetailPage() {
-  const params = useParams()
+  const [user, loading] = useAuthState(auth)
   const router = useRouter()
-  const entryId = Number(params.entryId)
 
-  const [entry, setEntry] = useState<any>(null)
+  const params = useParams()
+  const entryId = String(params.entryId)
+
+  const [entry, setEntry] = useState<UnifiedEntry | null>(null)
+  const [fetching, setFetching] = useState(true)
   const [title, setTitle] = useState("")
   const [content, setContent] = useState("")
-  const [date, setDate] = useState("")
-  const [startDate, setStartDate] = useState("")
-  const [endDate, setEndDate] = useState("")
+  const [date, setDate] = useState("") // for activity
+  const [startDate, setStartDate] = useState("") // for reflection
+  const [endDate, setEndDate] = useState("") // for reflection
   const [engagementLevel, setEngagementLevel] = useState([75])
   const [energyLevel, setEnergyLevel] = useState([0])
   const [isEditing, setIsEditing] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
+  // Redirect if not authenticated
   useEffect(() => {
-    // In a real app, this would be an API call
-    const foundEntry = entriesData.find((e) => e.id === entryId)
-    if (foundEntry) {
-      setEntry(foundEntry)
-      setTitle(foundEntry.title)
-      setContent(foundEntry.content)
+    if (!loading && !user) {
+      router.push("/login")
+    }
+  }, [loading, user, router])
 
-      if (foundEntry.type === "activity") {
-        setDate(foundEntry.date ?? "")
-        setEngagementLevel([foundEntry.engagementLevel ?? 0])
-        setEnergyLevel([foundEntry.energyLevel ?? 0])
+  // Fetch all activities + reflections, then find the matching entry
+  useEffect(() => {
+    if (!user) return
+
+    const loadEntry = async () => {
+      setFetching(true)
+
+      const activities = await getAllActivities(user.uid)
+      const reflections = await getAllReflections(user.uid)
+
+      const unified: UnifiedEntry[] = [
+        ...activities.map((a: Activity) => ({
+          id: a.id,
+          type: "activity" as const,
+          title: a.title,
+          content: a.content,
+          // a.date is already a Date (because service converted epoch→Date)
+          date: a.date.toISOString().substring(0, 10),
+          engagement: a.engagement,
+          energy: a.energy,
+        })),
+        ...reflections.map((r: Reflection) => ({
+          id: r.id,
+          type: "reflection" as const,
+          title: r.title,
+          content: r.content,
+          startDate: r.startDate.toISOString().substring(0, 10),
+          endDate: r.endDate.toISOString().substring(0, 10),
+        })),
+      ]
+
+      const found = unified.find((e) => e.id === entryId)
+      if (!found) {
+        console.error(`No entry found with ID: ${entryId}`)
+        router.push("/")
+        return
+      }
+
+      setEntry(found)
+      setTitle(found.title)
+      setContent(found.content)
+
+      if (found.type === "activity") {
+        setDate(found.date)
+        setEngagementLevel([found.engagement])
+        setEnergyLevel([found.energy])
       } else {
-        setStartDate(foundEntry.startDate ?? "")
-        setEndDate(foundEntry.endDate ?? "")
+        setStartDate(found.startDate)
+        setEndDate(found.endDate)
+      }
+
+      setFetching(false)
+    }
+
+    loadEntry()
+  }, [user, entryId, router])
+
+  const handleSave = async () => {
+    if (!user || !entry) return
+    setSaving(true)
+
+    if (entry.type === "activity") {
+      const updated: Omit<Activity, "id"> = {
+        title,
+        content,
+        date: new Date(date), // convert "YYYY-MM-DD" → Date
+        engagement: engagementLevel[0],
+        energy: energyLevel[0],
+      }
+      const success = await updateActivity(user.uid, entry.id, updated)
+      if (!success) {
+        console.error("Failed to update activity")
+        setSaving(false)
+        return
+      }
+    } else {
+      const updated: Omit<Reflection, "id"> = {
+        title,
+        content,
+        startDate: new Date(startDate), // convert "YYYY-MM-DD" → Date
+        endDate: new Date(endDate), // convert "YYYY-MM-DD" → Date
+      }
+      const success = await updateReflection(user.uid, entry.id, updated)
+      if (!success) {
+        console.error("Failed to update reflection")
+        setSaving(false)
+        return
       }
     }
-  }, [entryId])
 
-  const handleSave = () => {
-    // In a real app, this would be an API call to update the entry
-    console.log("Saving updated entry:", {
-      ...entry,
-      title,
-      content,
-      ...(entry?.type === "activity"
-        ? {
-            date,
-            engagementLevel: engagementLevel[0],
-            energyLevel: energyLevel[0],
-          }
-        : { startDate, endDate }),
-    })
-
-    setIsEditing(false)
-    // Redirect back after save in a real app
-    // router.push(entry?.type === "activity" ? "/" : "/reflections")
+    router.push(entry.type === "activity" ? "/" : "/reflections")
   }
 
-  const handleDelete = () => {
-    // In a real app, this would be an API call to delete the entry
-    console.log("Deleting entry:", entryId)
+  const handleDelete = async () => {
+    if (!user || !entry) return
+    setDeleting(true)
 
-    // Redirect back after delete
-    router.push(entry?.type === "activity" ? "/" : "/reflections")
+    if (entry.type === "activity") {
+      const success = await deleteActivity(user.uid, entry.id)
+      if (!success) {
+        console.error("Failed to delete activity")
+        setDeleting(false)
+        return
+      }
+    } else {
+      const success = await deleteReflection(user.uid, entry.id)
+      if (!success) {
+        console.error("Failed to delete reflection")
+        setDeleting(false)
+        return
+      }
+    }
+
+    setDeleting(false)
+    router.push(entry.type === "activity" ? "/" : "/reflections")
   }
 
   const handleBack = () => {
     router.push(entry?.type === "activity" ? "/" : "/reflections")
   }
 
-  if (!entry) {
+  if (loading || fetching) {
     return (
       <div className="flex items-center justify-center h-64">
-        <p>Loading entry...</p>
+        <Spinner />
       </div>
     )
+  }
+
+  if (!entry) {
+    return null
   }
 
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={handleBack}>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={handleBack}
+          disabled={saving || deleting}
+        >
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div>
@@ -161,6 +240,7 @@ export default function EntryDetailPage() {
                     id="edit-title"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
+                    disabled={saving || deleting}
                   />
                 </div>
                 <div className="space-y-2">
@@ -170,6 +250,7 @@ export default function EntryDetailPage() {
                     type="date"
                     value={date}
                     onChange={(e) => setDate(e.target.value)}
+                    disabled={saving || deleting}
                   />
                 </div>
                 <div className="space-y-2">
@@ -179,10 +260,9 @@ export default function EntryDetailPage() {
                     className="min-h-[150px]"
                     value={content}
                     onChange={(e) => setContent(e.target.value)}
+                    disabled={saving || deleting}
                   />
                 </div>
-
-                {/* Engagement Level Slider */}
                 <div className="space-y-3">
                   <Label htmlFor="edit-engagement">
                     Engagement Level: {engagementLevel[0]}%
@@ -194,14 +274,13 @@ export default function EntryDetailPage() {
                     step={5}
                     value={engagementLevel}
                     onValueChange={setEngagementLevel}
+                    disabled={saving || deleting}
                   />
                   <div className="flex justify-between text-xs text-muted-foreground">
                     <span>Not Engaged (0%)</span>
                     <span>Fully Engaged (100%)</span>
                   </div>
                 </div>
-
-                {/* Energy Level Slider */}
                 <div className="space-y-3">
                   <Label htmlFor="edit-energy">
                     Energy Level: {energyLevel[0] > 0 ? "+" : ""}
@@ -214,6 +293,7 @@ export default function EntryDetailPage() {
                     step={5}
                     value={energyLevel}
                     onValueChange={setEnergyLevel}
+                    disabled={saving || deleting}
                   />
                   <div className="flex justify-between text-xs text-muted-foreground">
                     <span>Draining (-100%)</span>
@@ -230,6 +310,7 @@ export default function EntryDetailPage() {
                     id="edit-title"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
+                    disabled={saving || deleting}
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
@@ -240,6 +321,7 @@ export default function EntryDetailPage() {
                       type="date"
                       value={startDate}
                       onChange={(e) => setStartDate(e.target.value)}
+                      disabled={saving || deleting}
                     />
                   </div>
                   <div className="space-y-2">
@@ -249,6 +331,7 @@ export default function EntryDetailPage() {
                       type="date"
                       value={endDate}
                       onChange={(e) => setEndDate(e.target.value)}
+                      disabled={saving || deleting}
                     />
                   </div>
                 </div>
@@ -259,17 +342,25 @@ export default function EntryDetailPage() {
                     className="min-h-[150px]"
                     value={content}
                     onChange={(e) => setContent(e.target.value)}
+                    disabled={saving || deleting}
                   />
                 </div>
               </>
             )}
-
             <div className="flex gap-3 pt-4">
-              <Button onClick={handleSave} className="flex items-center gap-2">
+              <Button
+                onClick={handleSave}
+                className="flex items-center gap-2"
+                disabled={saving || deleting}
+              >
                 <Save className="h-4 w-4" />
-                Save Changes
+                {saving ? "Saving..." : "Save Changes"}
               </Button>
-              <Button variant="outline" onClick={() => setIsEditing(false)}>
+              <Button
+                variant="outline"
+                onClick={() => setIsEditing(false)}
+                disabled={saving || deleting}
+              >
                 Cancel
               </Button>
             </div>
@@ -280,37 +371,41 @@ export default function EntryDetailPage() {
               <div className="prose max-w-none">
                 <p className="whitespace-pre-line">{entry.content}</p>
               </div>
-
               {entry.type === "activity" && (
                 <div className="flex flex-col sm:flex-row gap-4 mt-6">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium">Engagement:</span>
-                    <span className="text-sm">{entry.engagementLevel}%</span>
+                    <span className="text-sm">{entry.engagement}%</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium">Energy:</span>
                     <span
                       className={`text-sm ${
-                        entry.energyLevel >= 0
-                          ? "text-green-500"
-                          : "text-red-500"
+                        entry.energy >= 0 ? "text-green-500" : "text-red-500"
                       }`}
                     >
-                      {entry.energyLevel > 0 ? "+" : ""}
-                      {entry.energyLevel}%
+                      {entry.energy > 0 ? "+" : ""}
+                      {entry.energy}%
                     </span>
                   </div>
                 </div>
               )}
             </CardContent>
-
             <div className="border-t p-6 flex justify-between">
-              <Button variant="outline" onClick={() => setIsEditing(true)}>
+              <Button
+                variant="outline"
+                onClick={() => setIsEditing(true)}
+                disabled={saving || deleting}
+              >
                 Edit Entry
               </Button>
-              <Button variant="destructive" onClick={handleDelete}>
+              <Button
+                variant="destructive"
+                onClick={handleDelete}
+                disabled={saving || deleting}
+              >
                 <Trash className="h-4 w-4 mr-2" />
-                Delete Entry
+                {deleting ? "Deleting..." : "Delete Entry"}
               </Button>
             </div>
           </>

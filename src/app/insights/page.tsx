@@ -1,5 +1,6 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import {
   Card,
   CardContent,
@@ -15,6 +16,10 @@ import {
   ChartLegend,
   ChartLegendContent,
 } from "@/components/ui/chart"
+import { Spinner } from "@/components/ui/spinner"
+import { auth } from "@/lib/firebase/firebaseConfig"
+import { useRouter } from "next/navigation"
+import { useAuthState } from "react-firebase-hooks/auth"
 import {
   Area,
   AreaChart,
@@ -29,69 +34,13 @@ import {
   Label,
 } from "recharts"
 
-// Sample data for Energy and Engagement Over Time (last 30 days)
-const energyEngagementData = [
-  { date: "2025-05-02", energy: 75, engagement: 85 },
-  { date: "2025-05-03", energy: 60, engagement: 70 },
-  { date: "2025-05-04", energy: 80, engagement: 90 },
-  { date: "2025-05-05", energy: 45, engagement: 60 },
-  { date: "2025-05-06", energy: 70, engagement: 80 },
-  { date: "2025-05-07", energy: 85, engagement: 95 },
-  { date: "2025-05-08", energy: 90, engagement: 85 },
-  { date: "2025-05-09", energy: 55, engagement: 65 },
-  { date: "2025-05-10", energy: 75, engagement: 80 },
-  { date: "2025-05-11", energy: 65, engagement: 75 },
-  { date: "2025-05-12", energy: 80, engagement: 90 },
-  { date: "2025-05-13", energy: 70, engagement: 85 },
-  { date: "2025-05-14", energy: 85, engagement: 80 },
-  { date: "2025-05-15", energy: 60, engagement: 70 },
-  { date: "2025-05-16", energy: 75, engagement: 85 },
-  { date: "2025-05-17", energy: 80, engagement: 90 },
-  { date: "2025-05-18", energy: 70, engagement: 75 },
-  { date: "2025-05-19", energy: 85, engagement: 95 },
-  { date: "2025-05-20", energy: 65, engagement: 70 },
-  { date: "2025-05-21", energy: 75, engagement: 80 },
-  { date: "2025-05-22", energy: 80, engagement: 85 },
-  { date: "2025-05-23", energy: 70, engagement: 75 },
-  { date: "2025-05-24", energy: 85, engagement: 90 },
-  { date: "2025-05-25", energy: 60, engagement: 65 },
-  { date: "2025-05-26", energy: 75, engagement: 80 },
-  { date: "2025-05-27", energy: 80, engagement: 85 },
-  { date: "2025-05-28", energy: 70, engagement: 75 },
-  { date: "2025-05-29", energy: 85, engagement: 90 },
-  { date: "2025-05-30", energy: 75, engagement: 80 },
-  { date: "2025-06-01", energy: 80, engagement: 85 },
-]
-
-// Sample data for Weekly Engagement Trend
-const weeklyEngagementData = [
-  { week: "Week 1", engagement: 78 },
-  { week: "Week 2", engagement: 82 },
-  { week: "Week 3", engagement: 75 },
-  { week: "Week 4", engagement: 85 },
-  { week: "Week 5", engagement: 80 },
-  { week: "Week 6", engagement: 88 },
-  { week: "Week 7", engagement: 83 },
-  { week: "Week 8", engagement: 90 },
-]
-
-// Sample data for Weekly Energy Trend
-const weeklyEnergyData = [
-  { week: "Week 1", energy: 72 },
-  { week: "Week 2", energy: 78 },
-  { week: "Week 3", energy: 69 },
-  { week: "Week 4", energy: 81 },
-  { week: "Week 5", energy: 76 },
-  { week: "Week 6", energy: 84 },
-  { week: "Week 7", energy: 79 },
-  { week: "Week 8", energy: 86 },
-]
-
-// Sample data for Current Week's Radial Charts
-const currentWeekEnergy = [{ name: "Energy", value: 76, fill: "#3b82f6" }]
-const currentWeekEngagement = [
-  { name: "Engagement", value: 84, fill: "#10b981" },
-]
+// Import aggregator functions
+import {
+  getEnergyEngagementOverTime,
+  getWeeklyEngagementTrend,
+  getWeeklyEnergyTrend,
+  getCurrentWeekAverages,
+} from "@/lib/insightsAggregator"
 
 const areaChartConfig = {
   energy: {
@@ -130,6 +79,73 @@ const radialChartConfig = {
 } satisfies ChartConfig
 
 export default function InsightsPage() {
+  const [user, loading] = useAuthState(auth)
+  const router = useRouter()
+
+  const [energyEngagementData, setEnergyEngagementData] = useState<
+    Array<{ date: string; energy: number; engagement: number }>
+  >([])
+  const [weeklyEngagementData, setWeeklyEngagementData] = useState<
+    Array<{ week: string; engagement: number }>
+  >([])
+  const [weeklyEnergyData, setWeeklyEnergyData] = useState<
+    Array<{ week: string; energy: number }>
+  >([])
+  const [currentWeekEnergy, setCurrentWeekEnergy] = useState<
+    Array<{ name: string; value: number; displayValue: number; fill: string }>
+  >([])
+  const [currentWeekEngagement, setCurrentWeekEngagement] = useState<
+    Array<{ name: string; value: number; fill: string }>
+  >([])
+
+  const [fetching, setFetching] = useState(true)
+
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push("/login")
+    }
+  }, [loading, user, router])
+
+  useEffect(() => {
+    if (!user) return
+
+    const loadInsights = async () => {
+      setFetching(true)
+      const [eedata, wengdata, wenedata, currAverages] = await Promise.all([
+        getEnergyEngagementOverTime(user.uid),
+        getWeeklyEngagementTrend(user.uid),
+        getWeeklyEnergyTrend(user.uid),
+        getCurrentWeekAverages(user.uid),
+      ])
+
+      setEnergyEngagementData(eedata)
+      setWeeklyEngagementData(wengdata)
+      setWeeklyEnergyData(wenedata)
+      setCurrentWeekEnergy([
+        {
+          name: "Energy",
+          value: Math.abs(currAverages.energy),
+          displayValue: currAverages.energy,
+          fill: currAverages.energy >= 0 ? "#3b82f6" : "#ef233c",
+        },
+      ])
+      setCurrentWeekEngagement([
+        { name: "Engagement", value: currAverages.engagement, fill: "#10b981" },
+      ])
+      setFetching(false)
+    }
+
+    loadInsights()
+  }, [user])
+
+  if (loading || fetching) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Spinner />
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6 w-full">
       <div>
@@ -143,70 +159,9 @@ export default function InsightsPage() {
       <div className="grid gap-6 md:grid-cols-2">
         <Card className="pb-0 gap-0">
           <CardHeader className="items-center pb-0 text-center">
-            <CardTitle className="text-xl">Current Week's Energy</CardTitle>
-            <CardDescription>Average energy level this week</CardDescription>
-          </CardHeader>
-          <CardContent className="flex-1 pb-0">
-            <ChartContainer
-              config={radialChartConfig}
-              className="mx-auto aspect-square max-h-[250px]"
-            >
-              <RadialBarChart
-                data={currentWeekEnergy}
-                startAngle={0}
-                endAngle={250}
-                innerRadius={80}
-                outerRadius={110}
-              >
-                <PolarGrid
-                  gridType="circle"
-                  radialLines={false}
-                  stroke="none"
-                  className="first:fill-muted last:fill-background"
-                  polarRadius={[86, 74]}
-                />
-                <RadialBar dataKey="value" background cornerRadius={10} />
-                <PolarRadiusAxis tick={false} tickLine={false} axisLine={false}>
-                  <Label
-                    content={({ viewBox }) => {
-                      if (viewBox && "cx" in viewBox && "cy" in viewBox) {
-                        return (
-                          <text
-                            x={viewBox.cx}
-                            y={viewBox.cy}
-                            textAnchor="middle"
-                            dominantBaseline="middle"
-                          >
-                            <tspan
-                              x={viewBox.cx}
-                              y={viewBox.cy}
-                              className="fill-foreground text-4xl font-bold"
-                            >
-                              {currentWeekEnergy[0].value}%
-                            </tspan>
-                            <tspan
-                              x={viewBox.cx}
-                              y={(viewBox.cy || 0) + 24}
-                              className="fill-muted-foreground"
-                            >
-                              Energy
-                            </tspan>
-                          </text>
-                        )
-                      }
-                    }}
-                  />
-                </PolarRadiusAxis>
-              </RadialBarChart>
-            </ChartContainer>
-          </CardContent>
-        </Card>
-
-        <Card className="pb-0 gap-0">
-          <CardHeader className="items-center pb-0 text-center">
             <CardTitle className="text-xl">Current Week's Engagement</CardTitle>
             <CardDescription>
-              Average engagement level this week
+              Average engagement level in the last 7 days
             </CardDescription>
           </CardHeader>
           <CardContent className="flex-1 pb-0">
@@ -217,7 +172,7 @@ export default function InsightsPage() {
               <RadialBarChart
                 data={currentWeekEngagement}
                 startAngle={0}
-                endAngle={250}
+                endAngle={((currentWeekEngagement[0]?.value ?? 0) / 100) * 360}
                 innerRadius={80}
                 outerRadius={110}
               >
@@ -253,6 +208,69 @@ export default function InsightsPage() {
                               className="fill-muted-foreground"
                             >
                               Engagement
+                            </tspan>
+                          </text>
+                        )
+                      }
+                    }}
+                  />
+                </PolarRadiusAxis>
+              </RadialBarChart>
+            </ChartContainer>
+          </CardContent>
+        </Card>
+
+        <Card className="pb-0 gap-0">
+          <CardHeader className="items-center pb-0 text-center">
+            <CardTitle className="text-xl">Current Week's Energy</CardTitle>
+            <CardDescription>
+              Average energy level in the last 7 days
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex-1 pb-0">
+            <ChartContainer
+              config={radialChartConfig}
+              className="mx-auto aspect-square max-h-[250px]"
+            >
+              <RadialBarChart
+                data={currentWeekEnergy}
+                startAngle={0}
+                endAngle={((currentWeekEnergy[0]?.value ?? 0) / 100) * 360}
+                innerRadius={80}
+                outerRadius={110}
+              >
+                <PolarGrid
+                  gridType="circle"
+                  radialLines={false}
+                  stroke="none"
+                  className="first:fill-muted last:fill-background"
+                  polarRadius={[86, 74]}
+                />
+                <RadialBar dataKey="value" background cornerRadius={10} />
+                <PolarRadiusAxis tick={false} tickLine={false} axisLine={false}>
+                  <Label
+                    content={({ viewBox }) => {
+                      if (viewBox && "cx" in viewBox && "cy" in viewBox) {
+                        return (
+                          <text
+                            x={viewBox.cx}
+                            y={viewBox.cy}
+                            textAnchor="middle"
+                            dominantBaseline="middle"
+                          >
+                            <tspan
+                              x={viewBox.cx}
+                              y={viewBox.cy}
+                              className="fill-foreground text-4xl font-bold"
+                            >
+                              {currentWeekEnergy[0].displayValue}%
+                            </tspan>
+                            <tspan
+                              x={viewBox.cx}
+                              y={(viewBox.cy || 0) + 24}
+                              className="fill-muted-foreground"
+                            >
+                              Energy
                             </tspan>
                           </text>
                         )
@@ -314,7 +332,7 @@ export default function InsightsPage() {
                 />
                 <Area
                   dataKey="engagement"
-                  type="natural"
+                  type="monotone"
                   fill="var(--color-engagement)"
                   fillOpacity={0.4}
                   stroke="var(--color-engagement)"
@@ -322,7 +340,7 @@ export default function InsightsPage() {
                 />
                 <Area
                   dataKey="energy"
-                  type="natural"
+                  type="monotone"
                   fill="var(--color-energy)"
                   fillOpacity={0.4}
                   stroke="var(--color-energy)"
@@ -366,7 +384,7 @@ export default function InsightsPage() {
                 />
                 <Line
                   dataKey="engagement"
-                  type="natural"
+                  type="monotone"
                   stroke="var(--color-engagement)"
                   strokeWidth={2}
                   dot={{
@@ -413,7 +431,7 @@ export default function InsightsPage() {
                 />
                 <Line
                   dataKey="energy"
-                  type="natural"
+                  type="monotone"
                   stroke="var(--color-energy)"
                   strokeWidth={2}
                   dot={{

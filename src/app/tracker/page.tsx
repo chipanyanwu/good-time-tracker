@@ -16,9 +16,20 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Slider } from "@/components/ui/slider"
 import { Save, X } from "lucide-react"
 import { useRouter } from "next/navigation"
+import { useAuthState } from "react-firebase-hooks/auth"
+import { auth } from "@/lib/firebase/firebaseConfig"
+import { Spinner } from "@/components/ui/spinner"
+import { addActivity, addReflection } from "@/lib/firebase/db"
+import { Activity, Reflection } from "@/types/entry"
 
 export default function TrackerPage() {
+  const [user, loading] = useAuthState(auth)
   const router = useRouter()
+
+  if (!user) {
+    router.push("/login")
+  }
+
   const [activeTab, setActiveTab] = useState("activity")
   const [title, setTitle] = useState("")
   const [content, setContent] = useState("")
@@ -28,27 +39,39 @@ export default function TrackerPage() {
   const [engagementLevel, setEngagementLevel] = useState([75])
   const [energyLevel, setEnergyLevel] = useState([0])
 
-  const handleSave = () => {
-    // TODO: Implement save functionality
-    const entryData = {
-      type: activeTab,
-      title,
-      content,
-      ...(activeTab === "activity"
-        ? {
-            date,
-            engagementLevel: engagementLevel[0],
-            energyLevel: energyLevel[0],
-          }
-        : { startDate, endDate }),
-    }
+  const handleSave = async () => {
+    if (!user) return
 
-    console.log("Saving entry:", entryData)
-
-    // For now, just redirect back to the appropriate page
     if (activeTab === "activity") {
+      const newActivity: Activity = {
+        title,
+        content,
+        date: new Date(date),
+        engagement: engagementLevel[0],
+        energy: energyLevel[0],
+      }
+
+      const id = await addActivity(user.uid, newActivity)
+      if (!id) {
+        console.error("Failed to save activity")
+        return
+      }
+
       router.push("/")
     } else {
+      const newReflection: Reflection = {
+        title,
+        content,
+        startDate: new Date(startDate),
+        endDate: new Date(endDate),
+      }
+
+      const id = await addReflection(user.uid, newReflection)
+      if (!id) {
+        console.error("Failed to save reflection")
+        return
+      }
+
       router.push("/reflections")
     }
   }

@@ -1,67 +1,64 @@
+"use client"
+
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { PlusCircle } from "lucide-react"
 import { ActivityCard } from "@/components/activity-card"
+import { useAuthState } from "react-firebase-hooks/auth"
+import { auth } from "@/lib/firebase/firebaseConfig"
 import Link from "next/link"
-
-// Sample activity data
-const activities = [
-  {
-    id: 1,
-    title: "Morning Meditation",
-    date: "June 1, 2025",
-    content:
-      "Started the day with a 20-minute meditation session. Focused on breathing techniques and mindfulness. Felt very centered and ready to tackle the day ahead.",
-    engagementLevel: 100,
-    energyLevel: 75,
-  },
-  {
-    id: 2,
-    title: "Project Planning",
-    date: "June 1, 2025",
-    content:
-      "Spent 2 hours planning the new marketing campaign. Outlined key objectives, target audience, and content strategy. Team seemed engaged but we hit some roadblocks with budget constraints.",
-    engagementLevel: 85,
-    energyLevel: -20,
-  },
-  {
-    id: 3,
-    title: "Team Meeting",
-    date: "May 31, 2025",
-    content:
-      "Led the weekly team meeting. Discussed project progress, addressed concerns about the timeline, and assigned new tasks. Everyone participated actively.",
-    engagementLevel: 90,
-    energyLevel: 50,
-  },
-  {
-    id: 4,
-    title: "Client Presentation",
-    date: "May 31, 2025",
-    content:
-      "Presented the quarterly results to our main client. They were impressed with our performance but had some concerns about the new strategy. Need to follow up with more detailed analytics.",
-    engagementLevel: 95,
-    energyLevel: -50,
-  },
-  {
-    id: 5,
-    title: "Learning Session",
-    date: "May 30, 2025",
-    content:
-      "Attended a workshop on advanced data visualization techniques. Learned several new approaches that could be applied to our current projects. The instructor was very knowledgeable.",
-    engagementLevel: 75,
-    energyLevel: 30,
-  },
-]
+import { useRouter } from "next/navigation"
+import { Spinner } from "@/components/ui/spinner"
+import { getAllActivities } from "@/lib/firebase/db"
+import type { Activity } from "@/types/entry"
 
 export default function ActivityTrackerPage() {
+  const [user, loading] = useAuthState(auth)
+  const router = useRouter()
+
+  // Local state to hold fetched activities
+  const [activities, setActivities] = useState<Activity[]>([])
+  const [fetching, setFetching] = useState(true)
+
+  // Redirect unauthenticated users to /login
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push("/login")
+    }
+  }, [loading, user, router])
+
+  // Once the user is available, fetch their activities
+  useEffect(() => {
+    if (!user) return
+
+    const loadActivities = async () => {
+      setFetching(true)
+      const fetched = await getAllActivities(user.uid)
+      setActivities(fetched)
+      setFetching(false)
+    }
+
+    loadActivities()
+  }, [user])
+
+  // Show spinner while auth or data is loading
+  if (loading || fetching) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Spinner />
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center gap-3">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">
             Activity Tracker
           </h1>
           <p className="text-muted-foreground">
-            Track and monitor your daily activities and engagement levels.
+            Track and monitor your daily activities
           </p>
         </div>
         <Link href="/tracker">
@@ -72,19 +69,29 @@ export default function ActivityTrackerPage() {
         </Link>
       </div>
 
-      <div className="grid gap-4">
-        {activities.map((activity) => (
-          <ActivityCard
-            key={activity.id}
-            id={activity.id}
-            title={activity.title}
-            date={activity.date}
-            content={activity.content}
-            engagementLevel={activity.engagementLevel}
-            energyLevel={activity.energyLevel}
-          />
-        ))}
-      </div>
+      {activities.length === 0 ? (
+        <p className="text-center text-muted-foreground">
+          No activities found. Click “New Entry” to add your first activity.
+        </p>
+      ) : (
+        <div className="grid gap-4">
+          {activities.map((activity, index) => (
+            <ActivityCard
+              key={index}
+              id={activity.id}
+              title={activity.title}
+              date={new Date(activity.date).toLocaleDateString("en-US", {
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+              })}
+              content={activity.content}
+              engagementLevel={activity.engagement}
+              energyLevel={activity.energy}
+            />
+          ))}
+        </div>
+      )}
     </div>
   )
 }
