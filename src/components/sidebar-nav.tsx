@@ -17,7 +17,12 @@ import {
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
+import {
+  Sheet,
+  SheetTitle,
+  SheetContent,
+  SheetTrigger,
+} from "@/components/ui/sheet"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
   DropdownMenu,
@@ -95,7 +100,7 @@ export function SidebarNav({ className, ...props }: SidebarNavProps) {
           </div>
         </ScrollArea>
 
-        <div className="border-t px-3 pt-3 flex flex-col gap-1">
+        <div className="border-t px-3 pt-4 flex flex-col gap-1">
           {/* New Entry Button */}
           <Link href="/tracker">
             <Button className="w-full flex items-center gap-2">
@@ -152,6 +157,7 @@ export function MobileSidebar() {
 
   return (
     <Sheet>
+      <SheetTitle></SheetTitle>
       <SheetTrigger asChild>
         <Button variant="outline" size="icon" className="lg:hidden">
           <Menu className="h-5 w-5" />

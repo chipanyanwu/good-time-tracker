@@ -27,15 +27,15 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <div className="flex min-h-screen flex-col">
-            <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background px-4 lg:hidden">
+            <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background lg:hidden">
               <MobileSidebar />
               <div className="flex-1">
                 <h1 className="text-lg font-semibold">Good Time Tracker</h1>
               </div>
             </header>
-            <div className="flex flex-1">
+            <div className="flex flex-1 max-w-screen">
               <SidebarNav />
-              <main className="flex-1 p-6 lg:ml-64">{children}</main>
+              <main className="flex-1 p-6 lg:ml-64 w-full">{children}</main>
             </div>
           </div>
         </ThemeProvider>

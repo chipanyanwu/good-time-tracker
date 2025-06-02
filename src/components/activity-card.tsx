@@ -1,8 +1,12 @@
+"use client"
+
 import { Card, CardContent } from "@/components/ui/card"
 import { Activity, Battery } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useRouter } from "next/navigation"
 
 interface ActivityCardProps {
+  id: number
   title: string
   date: string
   content: string
@@ -11,12 +15,15 @@ interface ActivityCardProps {
 }
 
 export function ActivityCard({
+  id,
   title,
   date,
   content,
   engagementLevel,
   energyLevel,
 }: ActivityCardProps) {
+  const router = useRouter()
+
   // Format the engagement level as a percentage
   const engagementFormatted = `${engagementLevel}%`
 
@@ -26,19 +33,22 @@ export function ActivityCard({
   // Determine energy level color based on value
   const energyColor = energyLevel >= 0 ? "text-green-500" : "text-red-500"
 
+  const handleClick = () => {
+    router.push(`/entries/${id}`)
+  }
+
   return (
-    <Card className="w-full hover:shadow-md transition-shadow">
+    <Card
+      className="w-full hover:shadow-md transition-all duration-200 hover:-translate-y-1 cursor-pointer"
+      onClick={handleClick}
+    >
       <CardContent className="px-4">
-        <div className="flex justify-between items-start mb-2">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-2">
           <div>
-            <h3 className="font-medium text-lg">
-              {title}{" "}
-              <span className="text-muted-foreground text-sm font-normal">
-                / {date}
-              </span>
-            </h3>
+            <h3 className="font-medium text-lg">{title}</h3>
+            <p className="text-muted-foreground text-sm">{date}</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-row sm:flex-row gap-2 mt-2 sm:mt-0">
             <div className="flex items-center gap-1 text-sm border rounded-md px-2 py-1">
               <Activity className="h-4 w-4" />
               <span>{engagementFormatted}</span>

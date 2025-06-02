@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button"
 import { PlusCircle } from "lucide-react"
 import { ActivityCard } from "@/components/activity-card"
+import Link from "next/link"
 
 // Sample activity data
 const activities = [
@@ -60,19 +61,22 @@ export default function ActivityTrackerPage() {
             Activity Tracker
           </h1>
           <p className="text-muted-foreground">
-            Track and monitor your daily activities
+            Track and monitor your daily activities and engagement levels.
           </p>
         </div>
-        <Button size={"lg"} className="flex items-center gap-2">
-          <PlusCircle className="h-4 w-4" />
-          <span>New Entry</span>
-        </Button>
+        <Link href="/tracker">
+          <Button className="flex items-center gap-2">
+            <PlusCircle className="h-4 w-4" />
+            <span>New Entry</span>
+          </Button>
+        </Link>
       </div>
 
       <div className="grid gap-4">
         {activities.map((activity) => (
           <ActivityCard
             key={activity.id}
+            id={activity.id}
             title={activity.title}
             date={activity.date}
             content={activity.content}

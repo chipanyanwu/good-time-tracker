@@ -12,6 +12,8 @@ import {
   ChartContainer,
   ChartTooltip,
   ChartTooltipContent,
+  ChartLegend,
+  ChartLegendContent,
 } from "@/components/ui/chart"
 import {
   Area,
@@ -129,7 +131,7 @@ const radialChartConfig = {
 
 export default function InsightsPage() {
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 w-full">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Insights</h1>
         <p className="text-muted-foreground">
@@ -264,7 +266,7 @@ export default function InsightsPage() {
         </Card>
       </div>
 
-      <div className="grid gap-6">
+      <div className="flex flex-col gap-6 w-full">
         {/* Energy and Engagement Over Time - Area Chart */}
         <Card>
           <CardHeader>
@@ -276,16 +278,9 @@ export default function InsightsPage() {
           <CardContent>
             <ChartContainer
               config={areaChartConfig}
-              className="h-[300px] w-full"
+              className="aspect-auto h-[300px] w-full"
             >
-              <AreaChart
-                accessibilityLayer
-                data={energyEngagementData}
-                margin={{
-                  left: 12,
-                  right: 12,
-                }}
-              >
+              <AreaChart accessibilityLayer data={energyEngagementData}>
                 <XAxis
                   dataKey="date"
                   tickLine={false}
@@ -299,7 +294,12 @@ export default function InsightsPage() {
                     })
                   }}
                 />
-                <YAxis tickLine={false} axisLine={false} tickMargin={8} />
+                <YAxis
+                  tickLine={false}
+                  axisLine={false}
+                  tickMargin={8}
+                  width={30}
+                />
                 <ChartTooltip
                   cursor={false}
                   content={<ChartTooltipContent indicator="dot" />}
@@ -328,6 +328,7 @@ export default function InsightsPage() {
                   stroke="var(--color-energy)"
                   stackId="a"
                 />
+                <ChartLegend content={<ChartLegendContent />} />
               </AreaChart>
             </ChartContainer>
           </CardContent>
@@ -344,23 +345,21 @@ export default function InsightsPage() {
           <CardContent>
             <ChartContainer
               config={lineChartConfig}
-              className="h-[300px] w-full"
+              className="aspect-auto h-[300px] w-full"
             >
-              <LineChart
-                accessibilityLayer
-                data={weeklyEngagementData}
-                margin={{
-                  left: 12,
-                  right: 12,
-                }}
-              >
+              <LineChart accessibilityLayer data={weeklyEngagementData}>
                 <XAxis
                   dataKey="week"
                   tickLine={false}
                   axisLine={false}
                   tickMargin={8}
                 />
-                <YAxis tickLine={false} axisLine={false} tickMargin={8} />
+                <YAxis
+                  tickLine={false}
+                  axisLine={false}
+                  tickMargin={8}
+                  width={30}
+                />
                 <ChartTooltip
                   cursor={false}
                   content={<ChartTooltipContent hideLabel />}
@@ -393,23 +392,21 @@ export default function InsightsPage() {
           <CardContent>
             <ChartContainer
               config={energyLineChartConfig}
-              className="h-[300px] w-full"
+              className="aspect-auto h-[300px] w-full"
             >
-              <LineChart
-                accessibilityLayer
-                data={weeklyEnergyData}
-                margin={{
-                  left: 12,
-                  right: 12,
-                }}
-              >
+              <LineChart accessibilityLayer data={weeklyEnergyData}>
                 <XAxis
                   dataKey="week"
                   tickLine={false}
                   axisLine={false}
                   tickMargin={8}
                 />
-                <YAxis tickLine={false} axisLine={false} tickMargin={8} />
+                <YAxis
+                  tickLine={false}
+                  axisLine={false}
+                  tickMargin={8}
+                  width={30}
+                />
                 <ChartTooltip
                   cursor={false}
                   content={<ChartTooltipContent hideLabel />}
