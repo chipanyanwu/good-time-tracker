@@ -8,8 +8,8 @@ import { SidebarNav, MobileSidebar } from "@/components/sidebar-nav"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "Dashboard App",
-  description: "A dashboard application with navigation sidebar",
+  title: "Good Time Tracker",
+  description: "Track and monitor your daily activities and engagement levels",
 }
 
 export default function RootLayout({
@@ -30,12 +30,12 @@ export default function RootLayout({
             <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b bg-background px-4 lg:hidden">
               <MobileSidebar />
               <div className="flex-1">
-                <h1 className="text-lg font-semibold">Dashboard</h1>
+                <h1 className="text-lg font-semibold">Good Time Tracker</h1>
               </div>
             </header>
             <div className="flex flex-1">
-              <SidebarNav className="w-64" />
-              <main className="flex-1 p-6">{children}</main>
+              <SidebarNav />
+              <main className="flex-1 p-6 lg:ml-64">{children}</main>
             </div>
           </div>
         </ThemeProvider>
