@@ -43,10 +43,11 @@ export default function TrackerPage() {
     if (!user) return
 
     if (activeTab === "activity") {
-      const newActivity: Activity = {
+      console.log(date)
+      const newActivity: Omit<Activity, "id"> = {
         title,
         content,
-        date: new Date(date),
+        date: new Date(date.replace(/-/g, "/").replace(/T.+/, "")),
         engagement: engagementLevel[0],
         energy: energyLevel[0],
       }
@@ -59,11 +60,11 @@ export default function TrackerPage() {
 
       router.push("/")
     } else {
-      const newReflection: Reflection = {
+      const newReflection: Omit<Reflection, "id"> = {
         title,
         content,
-        startDate: new Date(startDate),
-        endDate: new Date(endDate),
+        startDate: new Date(startDate.replace(/-/g, "/").replace(/T.+/, "")),
+        endDate: new Date(endDate.replace(/-/g, "/").replace(/T.+/, "")),
       }
 
       const id = await addReflection(user.uid, newReflection)

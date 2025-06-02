@@ -51,7 +51,7 @@ export const getUser = async (userId: string) => {
  */
 export const addActivity = async (
   userId: string,
-  activity: Activity
+  activity: Omit<Activity, "id">
 ): Promise<string | null> => {
   const activityId = uuidv4()
   const payload = {
@@ -80,7 +80,7 @@ export const addActivity = async (
  */
 export const addReflection = async (
   userId: string,
-  reflection: Reflection
+  reflection: Omit<Reflection, "id">
 ): Promise<string | null> => {
   const reflectionId = uuidv4()
   const payload = {

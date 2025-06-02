@@ -34,6 +34,7 @@ export default function ReflectionsPage() {
     const loadReflections = async () => {
       setFetching(true)
       const fetched = await getAllReflections(user.uid)
+      fetched.sort((a, b) => b.startDate.getTime() - a.startDate.getTime())
       setReflections(fetched)
       setFetching(false)
     }

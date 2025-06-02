@@ -34,6 +34,7 @@ export default function ActivityTrackerPage() {
     const loadActivities = async () => {
       setFetching(true)
       const fetched = await getAllActivities(user.uid)
+      fetched.sort((a, b) => b.date.getTime() - a.date.getTime())
       setActivities(fetched)
       setFetching(false)
     }
