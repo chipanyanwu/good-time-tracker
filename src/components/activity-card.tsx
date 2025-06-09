@@ -4,6 +4,8 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Activity, Battery } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useRouter } from "next/navigation"
+import { Tag } from "@/types/entry"
+import { Badge } from "@/components/ui/badge"
 
 interface ActivityCardProps {
   id: string
@@ -12,6 +14,7 @@ interface ActivityCardProps {
   content: string
   engagementLevel: number // 0-100
   energyLevel: number // -100 to 100
+  tags?: Tag[]
 }
 
 export function ActivityCard({
@@ -21,6 +24,7 @@ export function ActivityCard({
   content,
   engagementLevel,
   energyLevel,
+  tags = [],
 }: ActivityCardProps) {
   const router = useRouter()
 
@@ -65,6 +69,15 @@ export function ActivityCard({
           </div>
         </div>
         <p className="text-muted-foreground line-clamp-2">{content}</p>
+        {tags.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {tags.map((tag) => (
+              <Badge key={tag.name} variant="outline">
+                {tag.name}
+              </Badge>
+            ))}
+          </div>
+        )}
       </CardContent>
     </Card>
   )

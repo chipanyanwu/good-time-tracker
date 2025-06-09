@@ -3,7 +3,7 @@ import { get, ref, set, remove, update, onValue, off } from "firebase/database"
 import { v4 as uuidv4 } from "uuid"
 import type { User } from "@/types/user"
 import type { User as FirebaseUser } from "firebase/auth"
-import type { Activity, Reflection } from "@/types/entry"
+import type { Activity, Reflection, Tag } from "@/types/entry"
 
 // User Functions
 export const addUser = async (user: FirebaseUser) => {
@@ -60,7 +60,10 @@ export const addActivity = async (
     date: activity.date.getTime(),
     engagement: activity.engagement,
     energy: activity.energy,
+    tags: activity.tags ?? ([] as Tag[]),
   }
+
+  console.log(payload)
 
   try {
     await set(
@@ -88,6 +91,7 @@ export const addReflection = async (
     content: reflection.content,
     startDate: reflection.startDate.getTime(),
     endDate: reflection.endDate.getTime(),
+    tags: reflection.tags ?? ([] as Tag[]),
   }
 
   try {
@@ -124,6 +128,7 @@ export const getAllActivities = async (userId: string): Promise<Activity[]> => {
         date: number
         engagement: number
         energy: number
+        tags?: Tag[]
       }
     >
 
@@ -134,6 +139,7 @@ export const getAllActivities = async (userId: string): Promise<Activity[]> => {
       date: new Date(item.date),
       engagement: item.engagement,
       energy: item.energy,
+      tags: item.tags ?? [],
     }))
   } catch (error) {
     console.error(`Error fetching all activities for ${userId}:`, error)
@@ -164,6 +170,7 @@ export const getAllReflections = async (
         content: string
         startDate: number
         endDate: number
+        tags?: Tag[]
       }
     >
 
@@ -173,6 +180,7 @@ export const getAllReflections = async (
       content: item.content,
       startDate: new Date(item.startDate),
       endDate: new Date(item.endDate),
+      tags: item.tags ?? [],
     }))
   } catch (error) {
     console.error(`Error fetching all reflections for ${userId}:`, error)
@@ -206,6 +214,7 @@ export const getActivityById = async (
       date: number
       engagement: number
       energy: number
+      tags?: Tag[]
     }
 
     return {
@@ -215,6 +224,7 @@ export const getActivityById = async (
       date: new Date(data.date),
       engagement: data.engagement,
       energy: data.energy,
+      tags: data.tags ?? [],
     }
   } catch (error) {
     console.error(`Error fetching activity ${activityId} for ${userId}:`, error)
@@ -247,6 +257,7 @@ export const getReflectionById = async (
       content: string
       startDate: number
       endDate: number
+      tags?: Tag[]
     }
 
     return {
@@ -255,6 +266,7 @@ export const getReflectionById = async (
       content: data.content,
       startDate: new Date(data.startDate),
       endDate: new Date(data.endDate),
+      tags: data.tags ?? [],
     }
   } catch (error) {
     console.error(
@@ -286,6 +298,7 @@ export const updateActivity = async (
       date: activity.date.getTime(), // store as ms
       engagement: activity.engagement,
       energy: activity.energy,
+      tags: activity.tags ?? [],
     })
     return true
   } catch (error) {
@@ -314,6 +327,7 @@ export const updateReflection = async (
       content: reflection.content,
       startDate: reflection.startDate.getTime(), // store as ms
       endDate: reflection.endDate.getTime(), // store as ms
+      tags: reflection.tags ?? [],
     })
     return true
   } catch (error) {

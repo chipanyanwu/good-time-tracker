@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,6 +12,7 @@ import { ArrowLeft, Save, Trash } from "lucide-react"
 import { useAuthState } from "react-firebase-hooks/auth"
 import { Spinner } from "@/components/ui/spinner"
 import { auth } from "@/lib/firebase/firebaseConfig"
+import { Badge } from "@/components/ui/badge"
 
 import {
   getAllActivities,
@@ -21,7 +22,14 @@ import {
   deleteActivity,
   deleteReflection,
 } from "@/lib/firebase/db"
-import type { Activity, Reflection } from "@/types/entry"
+import {
+  getUserTags,
+  upsertUserTag,
+  deleteUserTag,
+} from "@/lib/firebase/tagService"
+import { TagInput } from "@/components/tag-input"
+
+import type { Activity, Reflection, Tag } from "@/types/entry"
 
 type UnifiedEntry =
   | {
@@ -32,6 +40,7 @@ type UnifiedEntry =
       date: string // stored as "YYYY-MM-DD"
       engagement: number
       energy: number
+      tags?: Tag[]
     }
   | {
       id: string
@@ -40,17 +49,18 @@ type UnifiedEntry =
       content: string
       startDate: string // stored as "YYYY-MM-DD"
       endDate: string // stored as "YYYY-MM-DD"
+      tags?: Tag[]
     }
 
 export default function EntryDetailPage() {
   const [user, loading] = useAuthState(auth)
   const router = useRouter()
-
   const params = useParams()
   const entryId = String(params.entryId)
 
   const [entry, setEntry] = useState<UnifiedEntry | null>(null)
   const [fetching, setFetching] = useState(true)
+
   const [title, setTitle] = useState("")
   const [content, setContent] = useState("")
   const [date, setDate] = useState("") // for activity
@@ -58,6 +68,10 @@ export default function EntryDetailPage() {
   const [endDate, setEndDate] = useState("") // for reflection
   const [engagementLevel, setEngagementLevel] = useState([75])
   const [energyLevel, setEnergyLevel] = useState([0])
+
+  const [tags, setTags] = useState<Tag[]>([])
+  const [allTags, setAllTags] = useState<Tag[]>([])
+
   const [isEditing, setIsEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -68,6 +82,14 @@ export default function EntryDetailPage() {
       router.push("/login")
     }
   }, [loading, user, router])
+
+  // load user's tag list for suggestions
+  useEffect(() => {
+    if (!user) return
+    getUserTags(user.uid).then((names) =>
+      setAllTags(names.map((name) => ({ name })))
+    )
+  }, [user])
 
   // Fetch all activities + reflections, then find the matching entry
   useEffect(() => {
@@ -89,6 +111,7 @@ export default function EntryDetailPage() {
           date: a.date.toISOString().substring(0, 10),
           engagement: a.engagement,
           energy: a.energy,
+          tags: a.tags,
         })),
         ...reflections.map((r: Reflection) => ({
           id: r.id,
@@ -97,6 +120,7 @@ export default function EntryDetailPage() {
           content: r.content,
           startDate: r.startDate.toISOString().substring(0, 10),
           endDate: r.endDate.toISOString().substring(0, 10),
+          tags: r.tags,
         })),
       ]
 
@@ -110,6 +134,7 @@ export default function EntryDetailPage() {
       setEntry(found)
       setTitle(found.title)
       setContent(found.content)
+      setTags(found.tags ?? [])
 
       if (found.type === "activity") {
         setDate(found.date)
@@ -126,6 +151,29 @@ export default function EntryDetailPage() {
     loadEntry()
   }, [user, entryId, router])
 
+  const handleAddTag = useCallback(
+    (tag: Tag) => {
+      setTags((prev) => [...prev, tag])
+      upsertUserTag(user!.uid, tag.name).then(() =>
+        setAllTags((prev) =>
+          prev.some((t) => t.name === tag.name) ? prev : [...prev, tag]
+        )
+      )
+    },
+    [user]
+  )
+
+  const handleRemoveTag = useCallback(
+    (tag: Tag) => {
+      setTags((prev) => prev.filter((t) => t.name !== tag.name))
+      setAllTags((prev) => prev.filter((t) => t.name !== tag.name))
+      // deleteUserTag(user!.uid, tag.name).then(() =>
+      //   setAllTags((prev) => prev.filter((t) => t.name !== tag.name))
+      // )
+    },
+    [user]
+  )
+
   const handleSave = async () => {
     if (!user || !entry) return
     setSaving(true)
@@ -134,9 +182,10 @@ export default function EntryDetailPage() {
       const updated: Omit<Activity, "id"> = {
         title,
         content,
-        date: new Date(date), // convert "YYYY-MM-DD" → Date
+        date: new Date(date.replace(/-/g, "/").replace(/T.+/, "")), // convert "YYYY-MM-DD" → Date
         engagement: engagementLevel[0],
         energy: energyLevel[0],
+        tags,
       }
       const success = await updateActivity(user.uid, entry.id, updated)
       if (!success) {
@@ -148,8 +197,9 @@ export default function EntryDetailPage() {
       const updated: Omit<Reflection, "id"> = {
         title,
         content,
-        startDate: new Date(startDate), // convert "YYYY-MM-DD" → Date
-        endDate: new Date(endDate), // convert "YYYY-MM-DD" → Date
+        startDate: new Date(startDate.replace(/-/g, "/").replace(/T.+/, "")), // convert "YYYY-MM-DD" → Date
+        endDate: new Date(endDate.replace(/-/g, "/").replace(/T.+/, "")), // convert "YYYY-MM-DD" → Date
+        tags,
       }
       const success = await updateReflection(user.uid, entry.id, updated)
       if (!success) {
@@ -253,6 +303,57 @@ export default function EntryDetailPage() {
                     disabled={saving || deleting}
                   />
                 </div>
+                <div className="flex flex-row items-center h-fit gap-6 space-y-2">
+                  <div className="flex-1">
+                    <Label htmlFor="edit-engagement" className="pb-3">
+                      Engagement Level: {engagementLevel[0]}%
+                    </Label>
+                    <Slider
+                      id="edit-engagement"
+                      min={0}
+                      max={100}
+                      step={5}
+                      value={engagementLevel}
+                      onValueChange={setEngagementLevel}
+                      disabled={saving || deleting}
+                      className="w-full pb-2"
+                    />
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>Not Engaged (0%)</span>
+                      <span>Fully Engaged (100%)</span>
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    <Label htmlFor="edit-energy" className="pb-3">
+                      Energy Level: {energyLevel[0] > 0 ? "+" : ""}
+                      {energyLevel[0]}%
+                    </Label>
+                    <Slider
+                      id="edit-energy"
+                      min={-100}
+                      max={100}
+                      step={5}
+                      value={energyLevel}
+                      onValueChange={setEnergyLevel}
+                      disabled={saving || deleting}
+                      className="w-full pb-2"
+                    />
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>Draining (-100%)</span>
+                      <span>Neutral (0%)</span>
+                      <span>Energizing (+100%)</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Tags</Label>
+                  <TagInput
+                    selected={tags}
+                    suggestions={allTags}
+                    onAddAction={handleAddTag}
+                    onRemoveAction={handleRemoveTag}
+                  />
+                </div>
                 <div className="space-y-2">
                   <Label htmlFor="edit-content">Description</Label>
                   <Textarea
@@ -262,44 +363,6 @@ export default function EntryDetailPage() {
                     onChange={(e) => setContent(e.target.value)}
                     disabled={saving || deleting}
                   />
-                </div>
-                <div className="space-y-3">
-                  <Label htmlFor="edit-engagement">
-                    Engagement Level: {engagementLevel[0]}%
-                  </Label>
-                  <Slider
-                    id="edit-engagement"
-                    min={0}
-                    max={100}
-                    step={5}
-                    value={engagementLevel}
-                    onValueChange={setEngagementLevel}
-                    disabled={saving || deleting}
-                  />
-                  <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>Not Engaged (0%)</span>
-                    <span>Fully Engaged (100%)</span>
-                  </div>
-                </div>
-                <div className="space-y-3">
-                  <Label htmlFor="edit-energy">
-                    Energy Level: {energyLevel[0] > 0 ? "+" : ""}
-                    {energyLevel[0]}%
-                  </Label>
-                  <Slider
-                    id="edit-energy"
-                    min={-100}
-                    max={100}
-                    step={5}
-                    value={energyLevel}
-                    onValueChange={setEnergyLevel}
-                    disabled={saving || deleting}
-                  />
-                  <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>Draining (-100%)</span>
-                    <span>Neutral (0%)</span>
-                    <span>Energizing (+100%)</span>
-                  </div>
                 </div>
               </>
             ) : (
@@ -334,6 +397,15 @@ export default function EntryDetailPage() {
                       disabled={saving || deleting}
                     />
                   </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Tags</Label>
+                  <TagInput
+                    selected={tags}
+                    suggestions={allTags}
+                    onAddAction={handleAddTag}
+                    onRemoveAction={handleRemoveTag}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="edit-content">Content</Label>
@@ -372,22 +444,36 @@ export default function EntryDetailPage() {
                 <p className="whitespace-pre-line">{entry.content}</p>
               </div>
               {entry.type === "activity" && (
-                <div className="flex flex-col sm:flex-row gap-4 mt-6">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium">Engagement:</span>
-                    <span className="text-sm">{entry.engagement}%</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium">Energy:</span>
-                    <span
-                      className={`text-sm ${
-                        entry.energy >= 0 ? "text-green-500" : "text-red-500"
-                      }`}
-                    >
-                      {entry.energy > 0 ? "+" : ""}
-                      {entry.energy}%
-                    </span>
-                  </div>
+                <div className="flex flex-col sm:flex-row gap-2 mt-6">
+                  <Badge variant={"secondary"}>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium">Engagement:</span>
+                      <span className="text-sm">{entry.engagement}%</span>
+                    </div>
+                  </Badge>
+                  <Badge variant={"secondary"}>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium">Energy:</span>
+                      <span
+                        className={`text-sm ${
+                          entry.energy > 0 ? "text-green-500" : "text-red-500"
+                        }`}
+                      >
+                        {entry.energy > 0 ? "+" : ""}
+                        {entry.energy}%
+                      </span>
+                    </div>
+                  </Badge>
+                </div>
+              )}
+              {tags.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <h4>Tags:</h4>
+                  {tags.map((tag) => (
+                    <Badge key={tag.name} variant="outline">
+                      {tag.name}
+                    </Badge>
+                  ))}
                 </div>
               )}
             </CardContent>

@@ -1,3 +1,14 @@
+enum TagType {
+  "Rock",
+  "Pebble",
+  "Sand",
+}
+
+export interface Tag {
+  name: string
+  type?: TagType
+}
+
 export interface Activity {
   id: string
   title: string
@@ -5,6 +16,7 @@ export interface Activity {
   date: Date
   engagement: number
   energy: number
+  tags?: Tag[]
 }
 
 export interface Reflection {
@@ -13,4 +25,5 @@ export interface Reflection {
   content: string
   startDate: Date
   endDate: Date
+  tags?: Tag[]
 }

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -19,8 +19,16 @@ import { useRouter } from "next/navigation"
 import { useAuthState } from "react-firebase-hooks/auth"
 import { auth } from "@/lib/firebase/firebaseConfig"
 import { Spinner } from "@/components/ui/spinner"
+
+import { TagInput } from "@/components/tag-input"
+import {
+  getUserTags,
+  upsertUserTag,
+  deleteUserTag,
+} from "@/lib/firebase/tagService"
+
 import { addActivity, addReflection } from "@/lib/firebase/db"
-import { Activity, Reflection } from "@/types/entry"
+import { Activity, Reflection, Tag } from "@/types/entry"
 
 export default function TrackerPage() {
   const [user, loading] = useAuthState(auth)
@@ -39,6 +47,42 @@ export default function TrackerPage() {
   const [engagementLevel, setEngagementLevel] = useState([75])
   const [energyLevel, setEnergyLevel] = useState([0])
 
+  // tags
+  const [tags, setTags] = useState<Tag[]>([])
+  const [allTags, setAllTags] = useState<Tag[]>([])
+
+  // load user's tag suggestions once
+  useEffect(() => {
+    if (!user) return
+    getUserTags(user.uid).then((names) =>
+      setAllTags(names.map((name) => ({ name })))
+    )
+  }, [user])
+
+  const handleAddAction = useCallback(
+    (tag: Tag) => {
+      setTags((prev) => [...prev, tag])
+      // persist to /users/{uid}/tags
+      upsertUserTag(user!.uid, tag.name).then(() => {
+        setAllTags((prev) =>
+          prev.some((t) => t.name === tag.name) ? prev : [...prev, tag]
+        )
+      })
+    },
+    [user]
+  )
+
+  const handleRemoveAction = useCallback(
+    (tag: Tag) => {
+      setTags((prev) => prev.filter((t) => t.name !== tag.name))
+      setAllTags((prev) => prev.filter((t) => t.name !== tag.name))
+      // deleteUserTag(user!.uid, tag.name).then(() =>
+      //   setAllTags((prev) => prev.filter((t) => t.name !== tag.name))
+      // )
+    },
+    [user]
+  )
+
   const handleSave = async () => {
     if (!user) return
 
@@ -50,7 +94,10 @@ export default function TrackerPage() {
         date: new Date(date.replace(/-/g, "/").replace(/T.+/, "")),
         engagement: engagementLevel[0],
         energy: energyLevel[0],
+        tags,
       }
+
+      console.log(newActivity)
 
       const id = await addActivity(user.uid, newActivity)
       if (!id) {
@@ -65,6 +112,7 @@ export default function TrackerPage() {
         content,
         startDate: new Date(startDate.replace(/-/g, "/").replace(/T.+/, "")),
         endDate: new Date(endDate.replace(/-/g, "/").replace(/T.+/, "")),
+        tags,
       }
 
       const id = await addReflection(user.uid, newReflection)
@@ -94,6 +142,8 @@ export default function TrackerPage() {
     }
   }
 
+  if (loading) return <Spinner />
+
   const isActivityFormValid =
     title.trim() !== "" && content.trim() !== "" && date !== ""
   const isReflectionFormValid =
@@ -114,12 +164,6 @@ export default function TrackerPage() {
       </div>
 
       <Card className="w-full">
-        {/* <CardHeader>
-          <CardTitle>Entry Details</CardTitle>
-          <CardDescription>
-            Fill in the details for your new entry.
-          </CardDescription>
-        </CardHeader> */}
         <CardContent className="space-y-6">
           <Tabs
             value={activeTab}
@@ -141,6 +185,7 @@ export default function TrackerPage() {
                   onChange={(e) => setTitle(e.target.value)}
                 />
               </div>
+
               <div className="space-y-2">
                 <Label htmlFor="activity-date">Date</Label>
                 <Input
@@ -150,6 +195,61 @@ export default function TrackerPage() {
                   onChange={(e) => setDate(e.target.value)}
                 />
               </div>
+
+              <div className="flex flex-row items-center h-fit gap-6 space-y-2">
+                {/* Engagement Level Slider */}
+                <div className="flex-1">
+                  <Label htmlFor="engagement-level" className="pb-3">
+                    Engagement Level: {engagementLevel[0]}%
+                  </Label>
+                  <Slider
+                    id="engagement-level"
+                    min={0}
+                    max={100}
+                    step={5}
+                    value={engagementLevel}
+                    onValueChange={setEngagementLevel}
+                    className="w-full pb-2"
+                  />
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>Not Engaged (0%)</span>
+                    <span>Fully Engaged (100%)</span>
+                  </div>
+                </div>
+
+                {/* Energy Level Slider */}
+                <div className="flex-1">
+                  <Label htmlFor="energy-level" className="pb-3">
+                    Energy Level: {energyLevel[0] > 0 ? "+" : ""}
+                    {energyLevel[0]}%
+                  </Label>
+                  <Slider
+                    id="energy-level"
+                    min={-100}
+                    max={100}
+                    step={5}
+                    value={energyLevel}
+                    onValueChange={setEnergyLevel}
+                    className="w-full pb-2"
+                  />
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>Draining (-100%)</span>
+                    <span>Neutral (0%)</span>
+                    <span>Energizing (+100%)</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Tags</Label>
+                <TagInput
+                  selected={tags}
+                  suggestions={allTags}
+                  onAddAction={handleAddAction}
+                  onRemoveAction={handleRemoveAction}
+                />
+              </div>
+
               <div className="space-y-2">
                 <Label htmlFor="activity-content">Activity Description</Label>
                 <Textarea
@@ -159,48 +259,6 @@ export default function TrackerPage() {
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
                 />
-              </div>
-
-              {/* Engagement Level Slider */}
-              <div className="space-y-3 pt-3">
-                <Label htmlFor="engagement-level">
-                  Engagement Level: {engagementLevel[0]}%
-                </Label>
-                <Slider
-                  id="engagement-level"
-                  min={0}
-                  max={100}
-                  step={5}
-                  value={engagementLevel}
-                  onValueChange={setEngagementLevel}
-                  className="w-full"
-                />
-                <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>Not Engaged (0%)</span>
-                  <span>Fully Engaged (100%)</span>
-                </div>
-              </div>
-
-              {/* Energy Level Slider */}
-              <div className="space-y-3">
-                <Label htmlFor="energy-level">
-                  Energy Level: {energyLevel[0] > 0 ? "+" : ""}
-                  {energyLevel[0]}%
-                </Label>
-                <Slider
-                  id="energy-level"
-                  min={-100}
-                  max={100}
-                  step={5}
-                  value={energyLevel}
-                  onValueChange={setEnergyLevel}
-                  className="w-full"
-                />
-                <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>Draining (-100%)</span>
-                  <span>Neutral (0%)</span>
-                  <span>Energizing (+100%)</span>
-                </div>
               </div>
             </TabsContent>
 
@@ -233,6 +291,15 @@ export default function TrackerPage() {
                     onChange={(e) => setEndDate(e.target.value)}
                   />
                 </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Tags</Label>
+                <TagInput
+                  selected={tags}
+                  suggestions={allTags}
+                  onAddAction={handleAddAction}
+                  onRemoveAction={handleRemoveAction}
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="reflection-content">Reflection Content</Label>

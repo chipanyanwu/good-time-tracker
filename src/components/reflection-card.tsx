@@ -2,6 +2,8 @@
 
 import { Card, CardContent } from "@/components/ui/card"
 import { useRouter } from "next/navigation"
+import { Tag } from "@/types/entry"
+import { Badge } from "@/components/ui/badge"
 
 interface ReflectionCardProps {
   id: string
@@ -9,6 +11,7 @@ interface ReflectionCardProps {
   startDate: string
   endDate: string
   content: string
+  tags?: Tag[]
 }
 
 export function ReflectionCard({
@@ -17,6 +20,7 @@ export function ReflectionCard({
   startDate,
   endDate,
   content,
+  tags = [],
 }: ReflectionCardProps) {
   const router = useRouter()
 
@@ -37,6 +41,15 @@ export function ReflectionCard({
           </p>
         </div>
         <p className="text-muted-foreground line-clamp-2">{content}</p>
+        {tags.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {tags.map((tag) => (
+              <Badge key={tag.name} variant="outline">
+                {tag.name}
+              </Badge>
+            ))}
+          </div>
+        )}
       </CardContent>
     </Card>
   )

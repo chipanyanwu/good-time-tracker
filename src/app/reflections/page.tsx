@@ -1,48 +1,79 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { Button } from "@/components/ui/button"
-import { PlusCircle } from "lucide-react"
-import { ReflectionCard } from "@/components/reflection-card"
+import { useState, useEffect, useMemo } from "react"
+import { useRouter } from "next/navigation"
 import Link from "next/link"
+import { PlusCircle, Search } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Spinner } from "@/components/ui/spinner"
+import { getAllReflections } from "@/lib/firebase/db"
+import { getUserTags } from "@/lib/firebase/tagService"
 import { useAuthState } from "react-firebase-hooks/auth"
 import { auth } from "@/lib/firebase/firebaseConfig"
-import { useRouter } from "next/navigation"
-import { Spinner } from "@/components/ui/spinner"
-
-import { getAllReflections } from "@/lib/firebase/db"
-import type { Reflection } from "@/types/entry"
+import { ReflectionCard } from "@/components/reflection-card"
+import { MultiSelect } from "@/components/ui/multi-select"
+import type { Reflection, Tag } from "@/types/entry"
 
 export default function ReflectionsPage() {
   const [user, loading] = useAuthState(auth)
   const router = useRouter()
 
+  // all reflections
   const [reflections, setReflections] = useState<Reflection[]>([])
+  // all tags for filter
+  const [allTags, setAllTags] = useState<Tag[]>([])
+  // loading flag
   const [fetching, setFetching] = useState(true)
 
-  // Redirect unauthenticated users to /login
+  // filter state
+  const [searchQuery, setSearchQuery] = useState("")
+  const [selectedTags, setSelectedTags] = useState<string[]>([])
+
+  // redirect if unauthenticated
   useEffect(() => {
-    if (!loading && !user) {
-      router.push("/login")
-    }
+    if (!loading && !user) router.push("/login")
   }, [loading, user, router])
 
-  // Once the user is available, fetch their reflections
+  // fetch reflections and tag list
   useEffect(() => {
     if (!user) return
 
-    const loadReflections = async () => {
+    const loadData = async () => {
       setFetching(true)
+
+      // reflections
       const fetched = await getAllReflections(user.uid)
       fetched.sort((a, b) => b.startDate.getTime() - a.startDate.getTime())
       setReflections(fetched)
+
+      // user's tags
+      const tagNames = await getUserTags(user.uid)
+      setAllTags(tagNames.map((name) => ({ name })))
+
       setFetching(false)
     }
 
-    loadReflections()
+    loadData()
   }, [user])
 
-  // Show spinner while auth or data is loading
+  // compute filtered reflections
+  const filtered = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase()
+    return reflections.filter((r) => {
+      const matchesSearch =
+        !q ||
+        r.title.toLowerCase().includes(q) ||
+        r.content.toLowerCase().includes(q)
+
+      const matchesTags =
+        selectedTags.length === 0 ||
+        (r.tags ?? []).some((t) => selectedTags.includes(t.name))
+
+      return matchesSearch && matchesTags
+    })
+  }, [reflections, searchQuery, selectedTags])
+
   if (loading || fetching) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -53,6 +84,7 @@ export default function ReflectionsPage() {
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex justify-between items-center gap-3">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Reflections</h1>
@@ -68,13 +100,36 @@ export default function ReflectionsPage() {
         </Link>
       </div>
 
-      {reflections.length === 0 ? (
+      {/* Filters */}
+      <div className="flex flex-col sm:flex-row gap-4">
+        <div className="w-full max-w-xl">
+          <Input
+            placeholder="Search reflections..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="flex-1"
+            startIcon={Search}
+          />
+        </div>
+        <div className="w-full sm:w-64">
+          <MultiSelect
+            options={allTags.map((t) => ({ value: t.name, label: t.name }))}
+            defaultValue={selectedTags}
+            onValueChange={setSelectedTags}
+            placeholder="Filter by tags"
+            variant="default"
+          />
+        </div>
+      </div>
+
+      {/* No results message */}
+      {filtered.length === 0 ? (
         <p className="text-center text-muted-foreground">
-          No reflections found. Click “New Entry” to add your first reflection.
+          No reflections found.
         </p>
       ) : (
         <div className="grid gap-4">
-          {reflections.map((reflection) => (
+          {filtered.map((reflection) => (
             <ReflectionCard
               key={reflection.id}
               id={reflection.id}
@@ -90,6 +145,7 @@ export default function ReflectionsPage() {
                 day: "numeric",
               })}
               content={reflection.content}
+              tags={reflection.tags}
             />
           ))}
         </div>
