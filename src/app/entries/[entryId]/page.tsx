@@ -15,8 +15,8 @@ import { auth } from "@/lib/firebase/firebaseConfig"
 import { Badge } from "@/components/ui/badge"
 
 import {
-  getAllActivities,
-  getAllReflections,
+  getActivityById,
+  getReflectionById,
   updateActivity,
   updateReflection,
   deleteActivity,
@@ -86,9 +86,7 @@ export default function EntryDetailPage() {
   // load user's tag list for suggestions
   useEffect(() => {
     if (!user) return
-    getUserTags(user.uid).then((names) =>
-      setAllTags(names.map((name) => ({ name })))
-    )
+    getUserTags(user.uid).then((tags) => setAllTags(tags))
   }, [user])
 
   // Fetch all activities + reflections, then find the matching entry
@@ -98,52 +96,53 @@ export default function EntryDetailPage() {
     const loadEntry = async () => {
       setFetching(true)
 
-      const activities = await getAllActivities(user.uid)
-      const reflections = await getAllReflections(user.uid)
-
-      const unified: UnifiedEntry[] = [
-        ...activities.map((a: Activity) => ({
-          id: a.id,
-          type: "activity" as const,
-          title: a.title,
-          content: a.content,
-          // a.date is already a Date (because service converted epoch→Date)
-          date: a.date.toISOString().substring(0, 10),
-          engagement: a.engagement,
-          energy: a.energy,
-          tags: a.tags,
-        })),
-        ...reflections.map((r: Reflection) => ({
-          id: r.id,
-          type: "reflection" as const,
-          title: r.title,
-          content: r.content,
-          startDate: r.startDate.toISOString().substring(0, 10),
-          endDate: r.endDate.toISOString().substring(0, 10),
-          tags: r.tags,
-        })),
-      ]
-
-      const found = unified.find((e) => e.id === entryId)
-      if (!found) {
-        console.error(`No entry found with ID: ${entryId}`)
-        router.push("/")
+      // 1) try activity
+      const act = await getActivityById(user.uid, entryId)
+      if (act) {
+        setEntry({
+          id: act.id,
+          type: "activity",
+          title: act.title,
+          content: act.content,
+          date: act.date.toISOString().substring(0, 10),
+          engagement: act.engagement,
+          energy: act.energy,
+          tags: act.tags,
+        })
+        setTitle(act.title)
+        setContent(act.content)
+        setTags(act.tags ?? [])
+        setDate(act.date.toISOString().substring(0, 10))
+        setEngagementLevel([act.engagement])
+        setEnergyLevel([act.energy])
+        setFetching(false)
         return
       }
 
-      setEntry(found)
-      setTitle(found.title)
-      setContent(found.content)
-      setTags(found.tags ?? [])
-
-      if (found.type === "activity") {
-        setDate(found.date)
-        setEngagementLevel([found.engagement])
-        setEnergyLevel([found.energy])
-      } else {
-        setStartDate(found.startDate)
-        setEndDate(found.endDate)
+      // 2) fallback to reflection
+      const refl = await getReflectionById(user.uid, entryId)
+      if (refl) {
+        setEntry({
+          id: refl.id,
+          type: "reflection",
+          title: refl.title,
+          content: refl.content,
+          startDate: refl.startDate.toISOString().substring(0, 10),
+          endDate: refl.endDate.toISOString().substring(0, 10),
+          tags: refl.tags,
+        })
+        setTitle(refl.title)
+        setContent(refl.content)
+        setTags(refl.tags ?? [])
+        setStartDate(refl.startDate.toISOString().substring(0, 10))
+        setEndDate(refl.endDate.toISOString().substring(0, 10))
+        setFetching(false)
+        return
       }
+
+      // not found at all
+      console.error(`No entry found with ID: ${entryId}`)
+      router.push("/")
 
       setFetching(false)
     }
@@ -154,7 +153,7 @@ export default function EntryDetailPage() {
   const handleAddTag = useCallback(
     (tag: Tag) => {
       setTags((prev) => [...prev, tag])
-      upsertUserTag(user!.uid, tag.name).then(() =>
+      upsertUserTag(user!.uid, tag.name, tag.type).then(() =>
         setAllTags((prev) =>
           prev.some((t) => t.name === tag.name) ? prev : [...prev, tag]
         )

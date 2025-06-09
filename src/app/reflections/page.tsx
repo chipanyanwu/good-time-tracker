@@ -48,8 +48,8 @@ export default function ReflectionsPage() {
       setReflections(fetched)
 
       // user's tags
-      const tagNames = await getUserTags(user.uid)
-      setAllTags(tagNames.map((name) => ({ name })))
+      const tags = await getUserTags(user.uid)
+      setAllTags(tags)
 
       setFetching(false)
     }

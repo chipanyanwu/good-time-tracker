@@ -21,11 +21,7 @@ import { auth } from "@/lib/firebase/firebaseConfig"
 import { Spinner } from "@/components/ui/spinner"
 
 import { TagInput } from "@/components/tag-input"
-import {
-  getUserTags,
-  upsertUserTag,
-  deleteUserTag,
-} from "@/lib/firebase/tagService"
+import { getUserTags, upsertUserTag } from "@/lib/firebase/tagService"
 
 import { addActivity, addReflection } from "@/lib/firebase/db"
 import { Activity, Reflection, Tag } from "@/types/entry"
@@ -54,16 +50,14 @@ export default function TrackerPage() {
   // load user's tag suggestions once
   useEffect(() => {
     if (!user) return
-    getUserTags(user.uid).then((names) =>
-      setAllTags(names.map((name) => ({ name })))
-    )
+    getUserTags(user.uid).then((tags) => setAllTags(tags))
   }, [user])
 
   const handleAddAction = useCallback(
     (tag: Tag) => {
       setTags((prev) => [...prev, tag])
       // persist to /users/{uid}/tags
-      upsertUserTag(user!.uid, tag.name).then(() => {
+      upsertUserTag(user!.uid, tag.name, tag.type).then(() => {
         setAllTags((prev) =>
           prev.some((t) => t.name === tag.name) ? prev : [...prev, tag]
         )

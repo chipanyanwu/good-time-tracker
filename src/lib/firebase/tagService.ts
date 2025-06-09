@@ -1,30 +1,42 @@
 import { database } from "@/lib/firebase/firebaseConfig"
 import { ref, get, set, remove } from "firebase/database"
+import type { Tag, TagType } from "@/types/entry"
 
 /**
  * Adds or updates a tag in the user's global tag list.
- * Writes /users/{userId}/tags/{tag} = true
+ * Writes /users/{userId}/tags/{tagName} = { type?: TagType }
  */
 export const upsertUserTag = async (
   userId: string,
-  tag: string
+  tagName: string,
+  tagType?: TagType
 ): Promise<void> => {
-  await set(ref(database, `users/${userId}/tags/${tag}`), true)
+  const tagRef = ref(database, `users/${userId}/tags/${tagName}`)
+
+  // only include `type` if it’s defined
+  const payload: { type?: TagType } = {}
+  if (tagType !== undefined) {
+    payload.type = tagType
+  } else {
+    payload.type = "Default" as unknown as TagType
+  }
+
+  await set(tagRef, payload)
 }
 
 /**
  * Removes a tag from the user's global tag list.
- * Deletes /users/{userId}/tags/{tag}
+ * Deletes /users/{userId}/tags/{tagName}
  */
 export const deleteUserTag = async (
   userId: string,
-  tag: string
+  tagName: string
 ): Promise<boolean> => {
   try {
-    await remove(ref(database, `users/${userId}/tags/${tag}`))
+    await remove(ref(database, `users/${userId}/tags/${tagName}`))
     return true
   } catch (err) {
-    console.error(`Error deleting tag ${tag} for user ${userId}:`, err)
+    console.error(`Error deleting tag ${tagName} for user ${userId}:`, err)
     return false
   }
 }
@@ -32,10 +44,15 @@ export const deleteUserTag = async (
 /**
  * Fetches all tags for a user.
  * Reads /users/{userId}/tags
- * Returns an array of tag names.
+ * Returns an array of Tag { name, type? } objects
  */
-export const getUserTags = async (userId: string): Promise<string[]> => {
+export const getUserTags = async (userId: string): Promise<Tag[]> => {
   const snap = await get(ref(database, `users/${userId}/tags`))
   if (!snap.exists()) return []
-  return Object.keys(snap.val())
+
+  const raw = snap.val() as Record<string, { type?: TagType }>
+  return Object.entries(raw).map(([name, { type }]) => ({
+    name,
+    type,
+  }))
 }

@@ -1,4 +1,5 @@
 enum TagType {
+  "Default",
   "Rock",
   "Pebble",
   "Sand",

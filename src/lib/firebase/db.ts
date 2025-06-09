@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from "uuid"
 import type { User } from "@/types/user"
 import type { User as FirebaseUser } from "firebase/auth"
 import type { Activity, Reflection, Tag } from "@/types/entry"
+import { getUserTags } from "./tagService"
 
 // User Functions
 export const addUser = async (user: FirebaseUser) => {
@@ -60,10 +61,8 @@ export const addActivity = async (
     date: activity.date.getTime(),
     engagement: activity.engagement,
     energy: activity.energy,
-    tags: activity.tags ?? ([] as Tag[]),
+    tags: activity.tags?.map((t) => t.name) ?? [],
   }
-
-  console.log(payload)
 
   try {
     await set(
@@ -71,8 +70,7 @@ export const addActivity = async (
       payload
     )
     return activityId
-  } catch (error) {
-    console.error("Error adding activity:", error)
+  } catch {
     return null
   }
 }
@@ -91,7 +89,7 @@ export const addReflection = async (
     content: reflection.content,
     startDate: reflection.startDate.getTime(),
     endDate: reflection.endDate.getTime(),
-    tags: reflection.tags ?? ([] as Tag[]),
+    tags: reflection.tags?.map((t) => t.name) ?? [],
   }
 
   try {
@@ -100,8 +98,7 @@ export const addReflection = async (
       payload
     )
     return reflectionId
-  } catch (error) {
-    console.error("Error adding reflection:", error)
+  } catch {
     return null
   }
 }
@@ -112,39 +109,38 @@ export const addReflection = async (
  * Returns an array of Activity objects (with `date` parsed into a Date).
  */
 export const getAllActivities = async (userId: string): Promise<Activity[]> => {
-  try {
-    const activitiesRef = ref(database, `users/${userId}/activities`)
-    const snapshot = await get(activitiesRef)
+  const snap = await get(ref(database, `users/${userId}/activities`))
+  if (!snap.exists()) return []
 
-    if (!snapshot.exists()) {
-      return []
+  // 1) raw payload with tag-names
+  const raw = snap.val() as Record<
+    string,
+    {
+      title: string
+      content: string
+      date: number
+      engagement: number
+      energy: number
+      tags?: string[]
     }
+  >
 
-    const rawData = snapshot.val() as Record<
-      string,
-      {
-        title: string
-        content: string
-        date: number
-        engagement: number
-        energy: number
-        tags?: Tag[]
-      }
-    >
+  // 2) fetch the user’s full tags
+  const allTags = await getUserTags(userId)
 
-    return Object.entries(rawData).map(([id, item]) => ({
-      id,
-      title: item.title,
-      content: item.content,
-      date: new Date(item.date),
-      engagement: item.engagement,
-      energy: item.energy,
-      tags: item.tags ?? [],
-    }))
-  } catch (error) {
-    console.error(`Error fetching all activities for ${userId}:`, error)
-    return []
-  }
+  // 3) rebuild each Activity with full Tag[]
+  return Object.entries(raw).map(([id, item]) => ({
+    id,
+    title: item.title,
+    content: item.content,
+    date: new Date(item.date),
+    engagement: item.engagement,
+    energy: item.energy,
+    tags: (item.tags ?? []).map(
+      (name) =>
+        allTags.find((t) => t.name === name) || { name, type: undefined }
+    ),
+  }))
 }
 
 /**
@@ -155,37 +151,32 @@ export const getAllActivities = async (userId: string): Promise<Activity[]> => {
 export const getAllReflections = async (
   userId: string
 ): Promise<Reflection[]> => {
-  try {
-    const reflectionsRef = ref(database, `users/${userId}/reflections`)
-    const snapshot = await get(reflectionsRef)
+  const snap = await get(ref(database, `users/${userId}/reflections`))
+  if (!snap.exists()) return []
 
-    if (!snapshot.exists()) {
-      return []
+  const raw = snap.val() as Record<
+    string,
+    {
+      title: string
+      content: string
+      startDate: number
+      endDate: number
+      tags?: string[]
     }
+  >
 
-    const rawData = snapshot.val() as Record<
-      string,
-      {
-        title: string
-        content: string
-        startDate: number
-        endDate: number
-        tags?: Tag[]
-      }
-    >
-
-    return Object.entries(rawData).map(([id, item]) => ({
-      id,
-      title: item.title,
-      content: item.content,
-      startDate: new Date(item.startDate),
-      endDate: new Date(item.endDate),
-      tags: item.tags ?? [],
-    }))
-  } catch (error) {
-    console.error(`Error fetching all reflections for ${userId}:`, error)
-    return []
-  }
+  const allTags = await getUserTags(userId)
+  return Object.entries(raw).map(([id, item]) => ({
+    id,
+    title: item.title,
+    content: item.content,
+    startDate: new Date(item.startDate),
+    endDate: new Date(item.endDate),
+    tags: (item.tags ?? []).map(
+      (name) =>
+        allTags.find((t) => t.name === name) || { name, type: undefined }
+    ),
+  }))
 }
 
 /**
@@ -197,38 +188,34 @@ export const getActivityById = async (
   userId: string,
   activityId: string
 ): Promise<Activity | null> => {
-  try {
-    const activityRef = ref(
-      database,
-      `users/${userId}/activities/${activityId}`
-    )
-    const snapshot = await get(activityRef)
+  const snap = await get(
+    ref(database, `users/${userId}/activities/${activityId}`)
+  )
+  if (!snap.exists()) return null
 
-    if (!snapshot.exists()) {
-      return null
-    }
+  const data = snap.val() as {
+    title: string
+    content: string
+    date: number
+    engagement: number
+    energy: number
+    tags?: string[]
+  }
 
-    const data = snapshot.val() as {
-      title: string
-      content: string
-      date: number
-      engagement: number
-      energy: number
-      tags?: Tag[]
-    }
+  // look up full tags
+  const allTags = await getUserTags(userId)
+  const tags = (data.tags ?? []).map(
+    (name) => allTags.find((t) => t.name === name) || { name, type: undefined }
+  )
 
-    return {
-      id: activityId,
-      title: data.title,
-      content: data.content,
-      date: new Date(data.date),
-      engagement: data.engagement,
-      energy: data.energy,
-      tags: data.tags ?? [],
-    }
-  } catch (error) {
-    console.error(`Error fetching activity ${activityId} for ${userId}:`, error)
-    return null
+  return {
+    id: activityId,
+    title: data.title,
+    content: data.content,
+    date: new Date(data.date),
+    engagement: data.engagement,
+    energy: data.energy,
+    tags,
   }
 }
 
@@ -241,39 +228,31 @@ export const getReflectionById = async (
   userId: string,
   reflectionId: string
 ): Promise<Reflection | null> => {
-  try {
-    const reflectionRef = ref(
-      database,
-      `users/${userId}/reflections/${reflectionId}`
-    )
-    const snapshot = await get(reflectionRef)
+  const snap = await get(
+    ref(database, `users/${userId}/reflections/${reflectionId}`)
+  )
+  if (!snap.exists()) return null
 
-    if (!snapshot.exists()) {
-      return null
-    }
+  const data = snap.val() as {
+    title: string
+    content: string
+    startDate: number
+    endDate: number
+    tags?: string[]
+  }
 
-    const data = snapshot.val() as {
-      title: string
-      content: string
-      startDate: number
-      endDate: number
-      tags?: Tag[]
-    }
+  const allTags = await getUserTags(userId)
+  const tags = (data.tags ?? []).map(
+    (name) => allTags.find((t) => t.name === name) || { name, type: undefined }
+  )
 
-    return {
-      id: reflectionId,
-      title: data.title,
-      content: data.content,
-      startDate: new Date(data.startDate),
-      endDate: new Date(data.endDate),
-      tags: data.tags ?? [],
-    }
-  } catch (error) {
-    console.error(
-      `Error fetching reflection ${reflectionId} for ${userId}:`,
-      error
-    )
-    return null
+  return {
+    id: reflectionId,
+    title: data.title,
+    content: data.content,
+    startDate: new Date(data.startDate),
+    endDate: new Date(data.endDate),
+    tags,
   }
 }
 
@@ -288,21 +267,17 @@ export const updateActivity = async (
   activity: Omit<Activity, "id">
 ): Promise<boolean> => {
   try {
-    const activityRef = ref(
-      database,
-      `users/${userId}/activities/${activityId}`
-    )
-    await update(activityRef, {
+    await update(ref(database, `users/${userId}/activities/${activityId}`), {
       title: activity.title,
       content: activity.content,
-      date: activity.date.getTime(), // store as ms
+      date: activity.date.getTime(),
       engagement: activity.engagement,
       energy: activity.energy,
-      tags: activity.tags ?? [],
+      // only save the tag-names
+      tags: activity.tags?.map((t) => t.name) ?? [],
     })
     return true
-  } catch (error) {
-    console.error(`Error updating activity ${activityId}:`, error)
+  } catch {
     return false
   }
 }
@@ -312,26 +287,22 @@ export const updateActivity = async (
  * Writes to: /users/{userId}/reflections/{reflectionId}
  * Dates are stored as milliseconds since epoch.
  */
+
 export const updateReflection = async (
   userId: string,
   reflectionId: string,
   reflection: Omit<Reflection, "id">
 ): Promise<boolean> => {
   try {
-    const reflectionRef = ref(
-      database,
-      `users/${userId}/reflections/${reflectionId}`
-    )
-    await update(reflectionRef, {
+    await update(ref(database, `users/${userId}/reflections/${reflectionId}`), {
       title: reflection.title,
       content: reflection.content,
-      startDate: reflection.startDate.getTime(), // store as ms
-      endDate: reflection.endDate.getTime(), // store as ms
-      tags: reflection.tags ?? [],
+      startDate: reflection.startDate.getTime(),
+      endDate: reflection.endDate.getTime(),
+      tags: reflection.tags?.map((t) => t.name) ?? [],
     })
     return true
-  } catch (error) {
-    console.error(`Error updating reflection ${reflectionId}:`, error)
+  } catch {
     return false
   }
 }

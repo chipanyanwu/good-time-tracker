@@ -51,8 +51,8 @@ export default function ActivityTrackerPage() {
       setActivities(fetched)
 
       // user’s global tags
-      const tagNames = await getUserTags(user.uid)
-      setAllTags(tagNames.map((name) => ({ name })))
+      const tags = await getUserTags(user.uid)
+      setAllTags(tags)
 
       setFetching(false)
     }
